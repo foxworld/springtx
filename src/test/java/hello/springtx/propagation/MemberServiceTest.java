@@ -2,7 +2,6 @@ package hello.springtx.propagation;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
