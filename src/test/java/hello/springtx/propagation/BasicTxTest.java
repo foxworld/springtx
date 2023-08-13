@@ -1,6 +1,8 @@
 package hello.springtx.propagation;
 
 import lombok.extern.slf4j.Slf4j;
+
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -8,8 +10,13 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.transaction.interceptor.DefaultTransactionAttribute;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import javax.sql.DataSource;
 
 @Slf4j
@@ -55,7 +62,7 @@ public class BasicTxTest {
 		log.info("트랜잭션2 커밋");
 		txManager.commit(tx2);
 	}
-	
+
 	@Test
 	void double_commit_rollback() {
 		log.info("트랜잭션1 시작");
@@ -66,5 +73,80 @@ public class BasicTxTest {
 		TransactionStatus tx2 = txManager.getTransaction(new DefaultTransactionAttribute());
 		log.info("트랜잭션2 롤백");
 		txManager.rollback(tx2);
-	}	
+	}
+
+	@Test
+	void inner_commit() {
+		// 처음 트랜잭션을 시작한 외부 트랜잭션이 실제 물리 트랜잭션을 관리하도록 한다
+		// inner 트랙젝션은 무시하고 outer 트랜잭션으로 처리한다
+		log.info("외부 트랜잭션 시작");
+		TransactionStatus outer = txManager.getTransaction(new DefaultTransactionAttribute());
+		log.info("outer.isNewTransaction={}", outer.isNewTransaction());
+
+		log.info("내부 트랜잭션 시작");
+		TransactionStatus inner = txManager.getTransaction(new DefaultTransactionAttribute());
+		log.info("inner.isNewTransaction={}", inner.isNewTransaction());
+
+		log.info("내부 트랜잭션 커밋");
+		txManager.commit(inner);
+
+		log.info("외부 트랜잭션 커밋");
+		txManager.commit(outer);
+	}
+
+	@Test
+	void outer_rollback() {
+		// 처음 트랜잭션을 시작한 외부 트랜잭션이 실제 물리 트랜잭션을 관리하도록 한다
+		// inner 트랙젝션은 무시하고 outer 트랜잭션으로 처리한다
+		log.info("외부 트랜잭션 시작");
+		TransactionStatus outer = txManager.getTransaction(new DefaultTransactionAttribute());
+
+		log.info("내부 트랜잭션 시작");
+		TransactionStatus inner = txManager.getTransaction(new DefaultTransactionAttribute());
+		log.info("내부 트랜잭션 커밋");
+		txManager.commit(inner);
+
+		log.info("외부 트랜잭션 롤백");
+		txManager.rollback(outer);
+	}
+
+	@Test
+	void inner_rollback() {
+		// 하나라도 논리트랜잭션이 rollback 되면 물리 트랜잭션도 rollback 된다
+		log.info("외부 트랜잭션 시작");
+		TransactionStatus outer = txManager.getTransaction(new DefaultTransactionAttribute());
+
+		log.info("내부 트랜잭션 시작");
+		TransactionStatus inner = txManager.getTransaction(new DefaultTransactionAttribute());
+		log.info("내부 트랜잭션 롤백");
+		txManager.rollback(inner); // rollback-only 표시
+
+		log.info("외부 트랜잭션 커밋");
+		// txManager.commit(outer);
+		assertThatThrownBy(() -> txManager.commit(outer)).isInstanceOf(UnexpectedRollbackException.class);
+	}
+
+	@Test
+	void inner_rollback_requires_new() {
+		log.info("외부 트랜잭션 시작");
+		TransactionStatus outer = txManager.getTransaction(new DefaultTransactionAttribute());
+		log.info("outer.isNewTransaction()={}", outer.isNewTransaction());
+
+		// 새로운 트랜잭션으로 만든다
+		// 외부 트랜잭션에 영향을 주지 않는다
+		// 롤백이 되더라도 내부 트랜잭션만 적용된다	
+		// 실제 물리적 트랜잭션을 생성한다 
+		log.info("내부 트랜잭션 시작");
+		DefaultTransactionAttribute definition = new DefaultTransactionAttribute();
+		definition.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+		TransactionStatus inner = txManager.getTransaction(definition);
+		log.info("inner.isNewTransaction()={}", inner.isNewTransaction());
+		
+		log.info("내부 트랜잭션 롤백");
+		txManager.rollback(inner); // 롤백
+
+		log.info("외부 트랜잭션 커밋");
+		txManager.commit(outer); // 커밋
+	}
+
 }
