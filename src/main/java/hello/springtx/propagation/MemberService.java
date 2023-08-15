@@ -12,9 +12,10 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class MemberService {
 	
-	private final MemberRespository memberRespository;
+	private final MemberRepository memberRespository;
 	private final LogRepository logRepository;
 	
+	@Transactional
 	public void joinV1(String username) {
 		Member member = new Member(username);
 		Log logMessage = new Log(username);
@@ -28,6 +29,7 @@ public class MemberService {
 		log.info("== logRepositoy 호출 종료 ==");
 	}
 
+	@Transactional
 	public void joinV2(String username) {
 		Member member = new Member(username);
 		Log logMessage = new Log(username);

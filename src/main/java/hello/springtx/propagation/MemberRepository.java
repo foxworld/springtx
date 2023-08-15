@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Repository
 @RequiredArgsConstructor
-public class MemberRespository {
+public class MemberRepository {
 
 	private final EntityManager em;
 	
